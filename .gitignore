@@ -3,6 +3,6 @@
 ################################################################################
 
 /.vs
-/ShowCard/.vs/ShowCard
+/ShowCard/.vs
 /ShowCard/ShowCard/obj
-/ShowCard/.vs/ProjectEvaluation
+/ShowCard/ShowCard/bin
