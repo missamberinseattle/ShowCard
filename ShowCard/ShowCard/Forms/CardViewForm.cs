@@ -51,6 +51,8 @@ public partial class CardViewForm : Form
             LayoutCards();
             ShowBacks();
         };
+
+        // DoubleBuffered = true;
     }
 
     protected override void OnShown(EventArgs e)
