@@ -178,13 +178,13 @@ public partial class CardViewForm : Form
         _locationCard.ShowBack();
     }
 
-    public void RevealSuspect() => _suspectCard.Flip();
-    public void RevealWeapon() => _weaponCard.Flip();
-    public void RevealLocation() => _locationCard.Flip();
+    public void RevealSuspect() => _suspectCard.Flip(CardDisplay.Revealed);
+    public void RevealWeapon() => _weaponCard.Flip(CardDisplay.Revealed);
+    public void RevealLocation() => _locationCard.Flip(CardDisplay.Revealed);
 
-    public void HideSuspect() => _suspectCard.Flip();
-    public void HideWeapon() => _weaponCard.Flip();
-    public void HideLocation() => _locationCard.Flip();
+    public void HideSuspect() => _suspectCard.Flip(CardDisplay.Hidden);
+    public void HideWeapon() => _weaponCard.Flip(CardDisplay.Hidden);
+    public void HideLocation() => _locationCard.Flip(CardDisplay.Hidden);
 
     public void RevealAllSequential(int delayMs)
     {

@@ -10,5 +10,5 @@ public class Performer
     public Card? Weapon { get; set; }
     public Card? Location { get; set; }
 
-    public override string ToString() => $"{RunOrder}: {Name}";
+    public override string ToString() => $"{RunOrder}: {Name} [{Suspect}; {Weapon}; {Location}]";
 }

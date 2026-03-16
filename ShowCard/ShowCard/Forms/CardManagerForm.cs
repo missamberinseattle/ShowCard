@@ -1,7 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Windows.Forms;
+﻿using System.Diagnostics;
 using ShowCard.Models;
 using ShowCard.Services;
 
@@ -119,12 +116,12 @@ public class CardManagerForm : Form
         _addCardButton = new Button { Text = "Add Card" };
 
         _performerNameText = new TextBox();
-        _performerOrderNumeric = new NumericUpDown { Minimum = 1, Maximum = 999, Value = 1 };
+        _performerOrderNumeric = new NumericUpDown { Minimum = 0, Maximum = 999, Value = 1 };
         _suspectCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         _weaponCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         _locationCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         _addPerformerButton = new Button { Text = "Add Performer" };
-        _performerList = new ListBox();
+        _performerList = new ListBox() { Height = 300, Width = 300 };
 
         const int bottomButtonRowWidth = 120;
 
@@ -172,21 +169,27 @@ public class CardManagerForm : Form
         panel.Controls.Add(_addPerformerButton, 2, 9);
 
         panel.Controls.Add(_performerList, 3, 0);
-        panel.SetRowSpan(_performerList, 6);
+        panel.SetRowSpan(_performerList, 10);
 
-        panel.Controls.Add(_shuffleAssignButton, 3, 6);
-        panel.Controls.Add(_nextPerformerButton, 3, 7);
-        panel.Controls.Add(_revealSuspectButton, 3, 8);
-        panel.Controls.Add(_revealWeaponButton, 3, 9);
-
-        var bottomPanel = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
-        bottomPanel.Controls.AddRange(new Control[]
-        {
-            _revealLocationButton, _revealAllButton, _hideSuspectButton, _hideWeaponButton,
-            _hideLocationButton, _hideAllButton, _startAttractButton, _stopAttractButton,
-            _setWallpaperButton, new Label{ Text="Delay (ms)"}, _delayNumeric, _autoFlipCheckBox
+        CreateUIPanel("AttractMode", DockStyle.Bottom, new Control[] {
+            _startAttractButton, _stopAttractButton
         });
-        Controls.Add(bottomPanel);
+
+        CreateUIPanel("NextUp", DockStyle.Bottom, new Control[] {
+            _nextPerformerButton
+        });
+
+        CreateUIPanel("RevealCards", DockStyle.Bottom, new Control[] {
+            _revealAllButton, _revealSuspectButton, _revealWeaponButton, _revealLocationButton
+        });
+
+        CreateUIPanel("HideCards", DockStyle.Bottom, new Control[] {
+            _hideAllButton, _hideSuspectButton, _hideWeaponButton, _hideLocationButton
+        });
+
+        CreateUIPanel("Setup", DockStyle.Bottom, new Control[] {
+            _shuffleAssignButton, _setWallpaperButton, new Label{ Text="Delay (ms)"}, _delayNumeric, _autoFlipCheckBox
+        });
 
         var logPanel = new Panel { Dock = DockStyle.Bottom, Height = 120 };
         logPanel.Controls.Add(_logTextBox);
@@ -213,8 +216,18 @@ public class CardManagerForm : Form
 
     }
 
+    private FlowLayoutPanel CreateUIPanel(string name, DockStyle bottom, Control[] controls)
+    {
+        var panel = new FlowLayoutPanel { Name = name, Dock = bottom, AutoSize = true };
+        panel.Controls.AddRange(controls);
+        Controls.Add(panel);
+
+        return panel;
+    }
+
     private void WireEvents()
     {
+        // The (_, __) => lambda is a shorthand for ignoring the sender and event args
         _browseFaceButton.Click += (_, __) => BrowseForPath(_cardFacePathText);
         _browseBackButton.Click += (_, __) => BrowseForPath(_cardBackPathText);
 
@@ -234,7 +247,7 @@ public class CardManagerForm : Form
         _hideAllButton.Click += (_, __) => HideAll();
 
         _startAttractButton.Click += (_, __) => StartAttract();
-        _stopAttractButton.Click += (_, __) => _attract.Stop();
+        _stopAttractButton.Click += (_, __) => StopAttract();
 
         _setWallpaperButton.Click += (_, __) => SetWallpaper();
 
@@ -252,6 +265,7 @@ public class CardManagerForm : Form
         RefreshCardCombos();
         RefreshCardLists();
         _performerList.DataSource = _stateService.State.Performers;
+        _performerList.SelectedIndex = -1;
     }
 
     private void RefreshCardCombos()
@@ -373,12 +387,14 @@ public class CardManagerForm : Form
             _stateService.State.Locations);
 
         _stateService.Save();
+        _performerList.DataSource = _stateService.State.Performers.ToList(); // Refresh list
+
         _log.Info("Shuffled suspects and assigned weapons/locations.");
     }
 
     private void SetNextPerformer()
     {
-        int currentOrder = _currentPerformer?.RunOrder ?? 0;
+        int currentOrder = _currentPerformer?.RunOrder ?? -1;
         var next = _runService.GetNextPerformer(_stateService.State.Performers, currentOrder)
                    ?? _stateService.State.Performers.OrderBy(p => p.RunOrder).FirstOrDefault();
 
@@ -399,6 +415,13 @@ public class CardManagerForm : Form
 
     private void RevealAll()
     {
+        if (_currentPerformer == null)
+        {
+            MessageBox.Show("Next performer is not set.", "Nothing to show", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _log.Warn("Next performer not set.");
+            return;
+        }
+
         int delay = _stateService.State.RevealDelayMs;
         _cardView.RevealAllSequential(delay);
         _log.Info("Reveal all cards sequence.");
@@ -411,6 +434,17 @@ public class CardManagerForm : Form
         _log.Info("Hide all cards sequence.");
     }
 
+    private void StopAttract()
+    {
+        if (MessageBox.Show(this, "Stop attract mode?", "Confirm", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _attract.Stop();
+        _log.Info("Attract mode stopped.");
+    }
+
     private void StartAttract()
     {
         if (_performerList.Items.Count == 0)
@@ -419,19 +453,23 @@ public class CardManagerForm : Form
             return;
         }
 
+        if (MessageBox.Show(this, "Start attract mode? This will continuously cycle through performers and reveal cards.", "Confirm", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+        {
+            return;
+        }
+
         _attract.Start(
             _stateService.State,
-            showSequence: () =>
+            showSequence: (suspect, weapon, location) =>
             {
-                ShuffleAssign();
-                SetNextPerformer();
-                RevealAll();
+                _cardView.SetCards(suspect, weapon, location);
+                _cardView.RevealAllSequential(_stateService.State.RevealDelayMs);
             },
             hideSequence: () =>
             {
-                HideAll();
+                _cardView.HideAllSequential(_stateService.State.RevealDelayMs);
             });
-    }
+        }
 
     private void SetWallpaper()
     {

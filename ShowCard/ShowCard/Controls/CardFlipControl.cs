@@ -69,10 +69,18 @@ public class CardFlipControl : PictureBox
         Invalidate();
     }
 
-    public void Flip()
+    public void Flip(CardDisplay revealed = CardDisplay.NotSet)
     {
         if (_isFlipping)
+        {
             return;
+        }
+
+        if (revealed == CardDisplay.Revealed && IsFrontVisible || 
+            revealed == CardDisplay.Hidden && !IsFrontVisible)
+        {
+            return;
+        }
 
         _isFlipping = true;
         _flipStep = 0;

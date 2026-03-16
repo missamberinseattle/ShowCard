@@ -9,7 +9,7 @@ namespace ShowCard.Services;
 public class CardRunService : ICardRunService
 {
     private readonly ILogService _log;
-    private readonly Random _rng = new();
+    private static readonly Random _rng = new();
 
     public CardRunService(ILogService log)
     {
@@ -42,21 +42,51 @@ public class CardRunService : ICardRunService
             return;
         }
 
-        var shuffledSuspects = suspects.OrderBy(_ => _rng.Next()).ToList();
-        var shuffledWeapons = weapons.OrderBy(_ => _rng.Next()).ToList();
-        var shuffledLocations = locations.OrderBy(_ => _rng.Next()).ToList();
+        if (suspects.Count < performers.Count)
+        {
+            _log.Warn("Not enough suspect cards for all performers. Some performers will share suspects.");
+        }
 
-        int wIndex = 0, lIndex = 0;
+        if (weapons.Count < performers.Count)
+        {
+            _log.Warn("Not enough weapon cards for all performers. Some performers will share weapons.");
+        }
+
+        if (locations.Count < performers.Count)
+        {
+            _log.Warn("Not enough location cards for all performers. Some performers will share locations.");
+        }   
+
+        var shuffledSuspects = ShuffleList(suspects);
+        var shuffledWeapons = ShuffleList(weapons);
+        var shuffledLocations = ShuffleList(locations);
+
+        int wIndex = 0;
 
         foreach (var performer in performers.OrderBy(p => p.RunOrder))
         {
-            performer.Suspect = shuffledSuspects[_rng.Next(shuffledSuspects.Count)];
-            performer.Weapon = shuffledWeapons[wIndex % shuffledWeapons.Count];
-            performer.Location = shuffledLocations[lIndex % shuffledLocations.Count];
+            performer.Suspect = shuffledSuspects[wIndex];
+            performer.Weapon = shuffledWeapons[wIndex];
+            performer.Location = shuffledLocations[wIndex];
             wIndex++;
-            lIndex++;
-            _log.Info($"Assigned cards to performer {performer.Name}.");
+            
+            _log.Info($"Assigned cards to performer: {performer}.");
         }
+    }
+
+    public static List<Card> ShuffleList(List<Card> cards)
+    {
+        var shuffled = cards.ToArray();
+
+        for(var xx = 0; xx < cards.Count; xx++)
+        {
+            var swapIndex = _rng.Next(cards.Count);
+            var temp = shuffled[xx];
+            shuffled[xx] = shuffled[swapIndex];
+            shuffled[swapIndex] = temp;
+        }
+
+        return shuffled.ToList();
     }
 
     public Performer? GetNextPerformer(List<Performer> performers, int currentRunOrder)
