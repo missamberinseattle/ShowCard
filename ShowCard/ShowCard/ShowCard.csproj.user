@@ -4,6 +4,9 @@
     <Compile Update="Controls\CardFlipControl.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Forms\BackoutBackgrounForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="Forms\CardManagerForm.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -1,10 +1,11 @@
-﻿using System;
+﻿using ShowCard.Controls;
+using ShowCard.Enums;
+using ShowCard.Models;
+using ShowCard.Services;
+using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using ShowCard.Controls;
-using ShowCard.Models;
-using ShowCard.Services;
 using Timer = System.Windows.Forms.Timer;
 
 namespace ShowCard.Forms;
@@ -18,11 +19,23 @@ public partial class CardViewForm : Form
     private readonly CardFlipControl _weaponCard;
     private readonly CardFlipControl _locationCard;
 
+    private BlackoutBackgroundForm? _blackoutForm;
+
     [DllImport("kernel32.dll")]
     private static extern uint SetThreadExecutionState(uint esFlags);
     private const uint ES_CONTINUOUS = 0x80000000;
     private const uint ES_DISPLAY_REQUIRED = 0x00000002;
     private const uint ES_SYSTEM_REQUIRED = 0x00000001;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(
+    IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    private const int LWA_ALPHA = 0x2;
+
+    private const byte fadeStep = 10;
+    private const byte minAlpha = 10;
+    private const byte maxAlpha = 245;
 
     public CardViewForm(IAppStateService stateService, ILogService log)
     {
@@ -43,17 +56,119 @@ public partial class CardViewForm : Form
 
         Controls.AddRange(new Control[] { _suspectCard, _weaponCard, _locationCard });
 
-        Resize += (_, __) => LayoutCards();
-        Shown += (_, __) => ApplyWallpaper();
+        Resize += (_, __) =>
+        {
+            LayoutCards();
+
+            if (_blackoutForm != null)
+                _blackoutForm.Bounds = this.Bounds;
+        };
+
+        Shown += (_, __) =>
+        {
+            SetLayeredWindowAttributes(Handle, 0, 255, LWA_ALPHA);
+            CreateBlackoutBackground();
+            ApplyWallpaper();
+        };
 
         Load += (_, __) =>
         {
             LayoutCards();
             ShowBacks();
         };
-
-        // DoubleBuffered = true;
     }
+
+    private void CreateBlackoutBackground()
+    {
+        // Create only once
+        if (_blackoutForm != null)
+            return;
+
+        _blackoutForm = new BlackoutBackgroundForm(Bounds);
+
+        // Show behind this form
+        _blackoutForm.Show();
+        _blackoutForm.SendToBack();
+
+        // Ensure CardViewForm stays above it
+        this.BringToFront();
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            const int WS_EX_LAYERED = 0x80000;
+            var cp = base.CreateParams;
+            cp.ExStyle |= WS_EX_LAYERED;
+            return cp;
+        }
+    }
+
+    public LightState LightState { get; private set; } = LightState.Lit;
+
+    public void FadeOut()
+    {
+        if (LightState == LightState.Dark)
+            return;
+
+        LightState = LightState.Dark;
+
+        byte alpha = 255;
+        var timer = new Timer { Interval = 15 };
+
+        timer.Tick += (s, e) =>
+        {
+            alpha -= fadeStep;
+            _log.Info($"Fading out... Current alpha: {alpha}");
+
+            if (alpha <= minAlpha)
+            {
+                alpha = 0;
+                SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);
+                timer.Stop();
+                timer.Dispose();
+                return;
+            }
+
+            SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);
+        };
+
+        timer.Start();
+    }
+
+
+    public void FadeIn()
+    {
+        if (LightState == LightState.Lit)
+            return;
+
+        LightState = LightState.Lit;
+
+        byte alpha = 0;
+        var timer = new Timer { Interval = 15 };
+
+        timer.Tick += (s, e) =>
+        {
+            alpha += fadeStep;
+            _log.Info($"Fading in... Current alpha: {alpha}");
+
+            if (alpha >= maxAlpha)
+            {
+                alpha = 255;
+                SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);
+                timer.Stop();
+                timer.Dispose();
+                return;
+            }
+
+            SetLayeredWindowAttributes(Handle, 0, alpha, LWA_ALPHA);
+        };
+
+        timer.Start();
+    }
+
+
 
     protected override void OnShown(EventArgs e)
     {
@@ -65,6 +180,12 @@ public partial class CardViewForm : Form
     {
         PreventSleep(false);
         base.OnFormClosing(e);
+
+        if (_blackoutForm != null)
+        {
+            _blackoutForm.Close();
+            _blackoutForm = null;
+        }
     }
 
     private void PreventSleep(bool enable)

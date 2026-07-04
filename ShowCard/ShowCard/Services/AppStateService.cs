@@ -19,16 +19,21 @@ public class AppStateService : IAppStateService
 
     public void Load()
     {
+        Load(_statePath);
+    }
+
+    public void Load(string path)
+    {
         try
         {
-            if (File.Exists(_statePath))
+            if (File.Exists(path))
             {
-                var json = File.ReadAllText(_statePath);
+                var json = File.ReadAllText(path);
                 var state = JsonSerializer.Deserialize<AppState>(json);
                 if (state != null)
                     State = state;
             }
-            _log.Info("State loaded.");
+            _log.Info($"State loaded from {path}.");
         }
         catch (Exception ex)
         {
@@ -38,16 +43,34 @@ public class AppStateService : IAppStateService
 
     public void Save()
     {
+        Save(_statePath);
+    }
+
+    public void Save(string path)
+    {
         try
         {
-            FileBackupHelper.BackupFile(_statePath, _log);
+            FileBackupHelper.BackupFile(path!, _log);
             var json = JsonSerializer.Serialize(State, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_statePath, json);
+            File.WriteAllText(path!, json);
             _log.Info("State saved.");
         }
         catch (Exception ex)
         {
             _log.Info($"Error saving state: {ex.Message}");
         }
+    }
+
+    public static string GetDropboxPath()
+    {
+        var dropboxPath = Path.Combine(
+            new[] { 
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Dropbox",
+                "Shows",
+                "Murder! By Pasties"
+            });
+
+        return dropboxPath;
     }
 }
