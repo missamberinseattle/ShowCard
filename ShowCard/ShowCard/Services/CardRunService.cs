@@ -31,7 +31,8 @@ public class CardRunService : ICardRunService
         }
 
 
-        if (weapons.Count == 0) {
+        if (weapons.Count == 0)
+        {
             _log.Warn("No weapon cards available for assignment.");
             return;
         }
@@ -55,7 +56,7 @@ public class CardRunService : ICardRunService
         if (locations.Count < performers.Count)
         {
             _log.Warn("Not enough location cards for all performers. Some performers will share locations.");
-        }   
+        }
 
         var shuffledSuspects = ShuffleList(suspects);
         var shuffledWeapons = ShuffleList(weapons);
@@ -65,12 +66,20 @@ public class CardRunService : ICardRunService
 
         foreach (var performer in performers.OrderBy(p => p.RunOrder))
         {
-            performer.Suspect = shuffledSuspects[wIndex];
-            performer.Weapon = shuffledWeapons[wIndex];
-            performer.Location = shuffledLocations[wIndex];
+            performer.Suspect = shuffledSuspects[Math.Min(wIndex, shuffledSuspects.Count - 1)];
+            performer.Weapon = shuffledWeapons[Math.Min(wIndex, shuffledWeapons.Count - 1)];
+            performer.Location = shuffledLocations[Math.Min(wIndex, shuffledLocations.Count - 1)];
+
             wIndex++;
-            
+
             _log.Info($"Assigned cards to performer: {performer}.");
+        }
+
+        var validations = FindDuplicateAssignedCards(performers);
+
+        if (validations.Count > 0)
+        {
+            _log.Warn($"Duplicate cards found: {string.Join(", ", validations)}");
         }
     }
 
@@ -78,7 +87,7 @@ public class CardRunService : ICardRunService
     {
         var shuffled = cards.ToArray();
 
-        for(var xx = 0; xx < cards.Count; xx++)
+        for (var xx = 0; xx < cards.Count; xx++)
         {
             var swapIndex = _rng.Next(cards.Count);
             var temp = shuffled[xx];
@@ -87,6 +96,59 @@ public class CardRunService : ICardRunService
         }
 
         return shuffled.ToList();
+    }
+
+    public List<string> FindDuplicateAssignedCards(List<Performer> performers)
+    {
+        // Collect all assigned cards
+        var allAssigned = new List<Card>();
+
+        foreach (var p in performers)
+        {
+            if (p.Suspect != null)
+            {
+                allAssigned.Add(p.Suspect);
+            }
+            else
+            {
+                allAssigned.Add(BuildErrorCard(p.Name, p.Suspect, "Suspect"));
+            }
+            if (p.Weapon != null)
+            {
+                allAssigned.Add(p.Weapon);
+            }
+            else
+            {
+                allAssigned.Add(BuildErrorCard(p.Name, p.Weapon, "Weapon"));
+            }
+            if (p.Location != null)
+            {
+                allAssigned.Add(p.Location);
+            }
+            else
+            {
+                allAssigned.Add(BuildErrorCard(p.Name, p.Weapon, "Location"));
+            }
+        }
+
+        // Group by Title (your only unique identifier)
+        var duplicates = allAssigned
+            .GroupBy(c => c.Title)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.First())
+            .ToList();
+
+        foreach (var item in allAssigned)
+        {
+            if (item.Title.EndsWith("null")) duplicates.Add(item);
+        }
+
+        return duplicates.Select(c => c.Title).ToList<string>();
+    }
+
+    private Card BuildErrorCard(string name, Card? card, string cardType)
+    {
+        return new Card { Title = $"Performer: {name}; Type: {cardType}; Card: {(card != null ? card.Title : "null")}" };
     }
 
     public Performer? GetNextPerformer(List<Performer> performers, int currentRunOrder)

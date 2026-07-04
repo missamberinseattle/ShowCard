@@ -1,6 +1,7 @@
-﻿using System.Diagnostics;
+﻿using ShowCard.Enums;
 using ShowCard.Models;
 using ShowCard.Services;
+using System.Diagnostics;
 
 namespace ShowCard.Forms;
 
@@ -46,6 +47,9 @@ public class CardManagerForm : Form
     private Button _setWallpaperButton;
     private CheckBox _autoFlipCheckBox;
     private NumericUpDown _delayNumeric;
+    private Button _exportAppStateButton;
+    private Button _importAppStateButton;
+    private Button _fadeButton;
 
     // Card List Controls
     private ListView _suspectListView;
@@ -58,7 +62,9 @@ public class CardManagerForm : Form
 
     private Performer? _currentPerformer;
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
     public CardManagerForm(
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         IAppStateService stateService,
         ILogService log,
         ICardRunService runService,
@@ -127,6 +133,7 @@ public class CardManagerForm : Form
 
         _shuffleAssignButton = new Button { Text = "Shuffle & Assign", Width = bottomButtonRowWidth };
         _nextPerformerButton = new Button { Text = "Set Next Performer", Width = bottomButtonRowWidth };
+        _fadeButton = new Button { Text = "Fade Out", Width = bottomButtonRowWidth };
         _revealSuspectButton = new Button { Text = "Reveal Suspect", Width = bottomButtonRowWidth };
         _revealWeaponButton = new Button { Text = "Reveal Weapon", Width = bottomButtonRowWidth };
         _revealLocationButton = new Button { Text = "Reveal Location", Width = bottomButtonRowWidth };
@@ -140,6 +147,9 @@ public class CardManagerForm : Form
         _setWallpaperButton = new Button { Text = "Set Wallpaper", Width = bottomButtonRowWidth };
         _autoFlipCheckBox = new CheckBox { Text = "Auto flip 3-card set", Width = bottomButtonRowWidth };
         _delayNumeric = new NumericUpDown { Minimum = 100, Maximum = 10000, Value = _stateService.State.RevealDelayMs, Increment = 100 };
+
+        _exportAppStateButton = new Button { Text = "Export State", Width = bottomButtonRowWidth };
+        _importAppStateButton = new Button { Text = "Import State", Width = bottomButtonRowWidth };
 
         _logTextBox = new TextBox { Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle };
 
@@ -172,23 +182,43 @@ public class CardManagerForm : Form
         panel.SetRowSpan(_performerList, 10);
 
         CreateUIPanel("AttractMode", DockStyle.Bottom, new Control[] {
-            _startAttractButton, _stopAttractButton
+            _startAttractButton, 
+            _stopAttractButton
         });
 
         CreateUIPanel("NextUp", DockStyle.Bottom, new Control[] {
             _nextPerformerButton
         });
 
+        CreateUIPanel("CardViewControls", DockStyle.Bottom, new Control[] {
+            _fadeButton
+        });
+
         CreateUIPanel("RevealCards", DockStyle.Bottom, new Control[] {
-            _revealAllButton, _revealSuspectButton, _revealWeaponButton, _revealLocationButton
+            _revealAllButton, 
+            _revealSuspectButton, 
+            _revealWeaponButton, 
+            _revealLocationButton
         });
 
         CreateUIPanel("HideCards", DockStyle.Bottom, new Control[] {
-            _hideAllButton, _hideSuspectButton, _hideWeaponButton, _hideLocationButton
+            _hideAllButton, 
+            _hideSuspectButton, 
+            _hideWeaponButton, 
+            _hideLocationButton
         });
 
         CreateUIPanel("Setup", DockStyle.Bottom, new Control[] {
-            _shuffleAssignButton, _setWallpaperButton, new Label{ Text="Delay (ms)"}, _delayNumeric, _autoFlipCheckBox
+            _shuffleAssignButton, 
+            _setWallpaperButton, 
+            new Label{ Text="Delay (ms)"}, 
+            _delayNumeric, 
+            _autoFlipCheckBox
+        });
+
+        CreateUIPanel("StateManagement", DockStyle.Bottom, new Control[] {
+            _exportAppStateButton, 
+            _importAppStateButton
         });
 
         var logPanel = new Panel { Dock = DockStyle.Bottom, Height = 120 };
@@ -237,9 +267,41 @@ public class CardManagerForm : Form
         _shuffleAssignButton.Click += (_, __) => ShuffleAssign();
         _nextPerformerButton.Click += (_, __) => SetNextPerformer();
 
-        _revealSuspectButton.Click += (_, __) => { _cardView.RevealSuspect(); _log.Info("Reveal suspect."); };
-        _revealWeaponButton.Click += (_, __) => { _cardView.RevealWeapon(); _log.Info("Reveal weapon."); };
-        _revealLocationButton.Click += (_, __) => { _cardView.RevealLocation(); _log.Info("Reveal location."); };
+        _importAppStateButton.Click += (_, __) =>
+        {
+            using var ofd = new OpenFileDialog
+            {
+                RestoreDirectory = true,
+                
+                InitialDirectory = Path.Combine(AppStateService.GetDropboxPath(), "Show Card States"),
+                Filter = "JSON Files|*.json|All Files|*.*"
+            };
+            if (ofd.ShowDialog(this) == DialogResult.OK)
+            {
+                _stateService.Load(ofd.FileName);
+                BindData();
+                _log.Info($"State imported from {ofd.FileName}.");
+            }
+        };
+
+        _exportAppStateButton.Click += (_, __) =>
+        {
+            using var sfd = new SaveFileDialog
+            {
+                InitialDirectory = Path.Combine(AppStateService.GetDropboxPath(), "Show Card States"),
+                Filter = "JSON Files|*.json|All Files|*.*",
+                FileName = $"ShowCardState_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            };
+            if (sfd.ShowDialog(this) == DialogResult.OK)
+            {
+                _stateService.Save(sfd.FileName);
+                _log.Info($"State exported to {sfd.FileName}.");
+            }
+        };
+
+        _revealSuspectButton.Click += (_, __) => { EnsureLit(); _cardView.RevealSuspect(); _log.Info("Reveal suspect."); };
+        _revealWeaponButton.Click += (_, __) => { EnsureLit(); _cardView.RevealWeapon(); _log.Info("Reveal weapon."); };
+        _revealLocationButton.Click += (_, __) => { EnsureLit(); _cardView.RevealLocation(); _log.Info("Reveal location."); };
         _revealAllButton.Click += (_, __) => RevealAll();
         _hideSuspectButton.Click += (_, __) => { _cardView.HideSuspect(); _log.Info("Hide suspect."); };
         _hideWeaponButton.Click += (_, __) => { _cardView.HideWeapon(); _log.Info("Hide weapon."); };
@@ -248,6 +310,8 @@ public class CardManagerForm : Form
 
         _startAttractButton.Click += (_, __) => StartAttract();
         _stopAttractButton.Click += (_, __) => StopAttract();
+
+        _fadeButton.Click += (_, __) => ToggleFade();
 
         _setWallpaperButton.Click += (_, __) => SetWallpaper();
 
@@ -330,6 +394,7 @@ public class CardManagerForm : Form
         {
             case "Suspect":
                 _stateService.State.Suspects.Add(card);
+                _performerNameText.Text = title; // Pre-fill performer name with suspect title for convenience
                 break;
             case "Weapon":
                 _stateService.State.Weapons.Add(card);
@@ -376,6 +441,8 @@ public class CardManagerForm : Form
 
         _stateService.Save();
         _log.Info($"Added performer '{performer.Name}' with run order {performer.RunOrder}.");
+
+        _performerOrderNumeric.Value = ((int)_performerOrderNumeric.Value) + 1;
     }
 
     private void ShuffleAssign()
@@ -405,12 +472,28 @@ public class CardManagerForm : Form
 
         _currentPerformer = next;
         _performerList.SelectedItem = next;
-        _cardView.SetCards(next.Suspect, next.Weapon, next.Location);
+        _cardView.SetCards(next!.Suspect, next.Weapon, next.Location);
         _cardView.ShowBacks();
         _log.Info($"Next performer set: {next.Name}.");
 
         if (_autoFlipCheckBox.Checked)
             RevealAll();
+    }
+
+    private void ToggleFade()
+    {
+        if (_cardView.LightState == LightState.Lit)
+        {
+            _cardView.FadeOut();
+            _fadeButton.Text = "Fade In";
+            _log.Info("Fade out triggered.");
+        }
+        else
+        {
+            _cardView.FadeIn();
+            _fadeButton.Text = "Fade Out";
+            _log.Info("Fade in triggered.");
+        }
     }
 
     private void RevealAll()
@@ -422,9 +505,19 @@ public class CardManagerForm : Form
             return;
         }
 
+        EnsureLit();
         int delay = _stateService.State.RevealDelayMs;
         _cardView.RevealAllSequential(delay);
         _log.Info("Reveal all cards sequence.");
+    }
+
+    private void EnsureLit()
+    {
+        if (_cardView.LightState == LightState.Dark)
+        {
+            _cardView.FadeIn();
+            _fadeButton.Text = "Fade Out";
+        }
     }
 
     private void HideAll()
@@ -458,6 +551,8 @@ public class CardManagerForm : Form
             return;
         }
 
+        EnsureLit();
+
         _attract.Start(
             _stateService.State,
             showSequence: (suspect, weapon, location) =>
@@ -469,7 +564,7 @@ public class CardManagerForm : Form
             {
                 _cardView.HideAllSequential(_stateService.State.RevealDelayMs);
             });
-        }
+    }
 
     private void SetWallpaper()
     {
@@ -561,6 +656,18 @@ public class CardManagerForm : Form
 
         foreach (var card in _stateService.State.Locations)
             AddCardToList(_locationListView, card);
+    }
+
+    private void InitializeComponent()
+    {
+        SuspendLayout();
+        // 
+        // CardManagerForm
+        // 
+        ClientSize = new Size(978, 842);
+        Name = "CardManagerForm";
+        ResumeLayout(false);
+
     }
 
     private void AddCardToList(ListView lv, Card card)
