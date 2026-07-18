@@ -1,4 +1,5 @@
-﻿using ShowCard.Services;
+﻿using ShowCard.Models;
+using ShowCard.Services;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -57,7 +58,7 @@ public class CardFlipControl : PictureBox
     {
         IsFrontVisible = false;
         Image = BackImage;
-        _log.Info("Card flipped to back.");
+        _log.Info($"{Text} flipped to back.");
         Invalidate();
     }
 
@@ -65,7 +66,7 @@ public class CardFlipControl : PictureBox
     {
         IsFrontVisible = true;
         Image = FrontImage;
-        _log.Info($"Card flipped to front::{Text}");
+        _log.Info($"{Text} flipped to front::{Text}");
         Invalidate();
     }
 

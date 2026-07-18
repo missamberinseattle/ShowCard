@@ -269,7 +269,7 @@ public partial class CardViewForm : Form
             return;
         }
 
-        control.Text = card.Title;
+        control.Text = $"{Path.GetFileNameWithoutExtension(card.FaceImagePath)}: {card.Title}";
 
         if (File.Exists(card.FaceImagePath))
         {
