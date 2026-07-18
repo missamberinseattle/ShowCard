@@ -22,6 +22,9 @@ public class CardManagerForm : Form
     private Button _browseBackButton;
     private Button _addCardButton;
 
+    // Current State View
+    private Label _nextPerformerLabel;
+
     // Performer controls
     private TextBox _performerNameText;
     private NumericUpDown _performerOrderNumeric;
@@ -129,6 +132,20 @@ public class CardManagerForm : Form
         _addPerformerButton = new Button { Text = "Add Performer" };
         _performerList = new ListBox() { Height = 300, Width = 300 };
 
+
+        _nextPerformerLabel = new Label
+        {
+            Text = "Next Performer: None",
+            AutoSize = true,
+            Font = new Font(
+                "Segoe UI",          // Font family
+                20f,                 // Font size
+                FontStyle.Bold       // Style (Bold, Italic, Regular, etc.)
+            ),
+            ForeColor = Color.Red,   // Text color
+            BackColor = Color.Transparent     // Optional
+        };
+
         const int bottomButtonRowWidth = 120;
 
         _shuffleAssignButton = new Button { Text = "Shuffle & Assign", Width = bottomButtonRowWidth };
@@ -181,8 +198,12 @@ public class CardManagerForm : Form
         panel.Controls.Add(_performerList, 3, 0);
         panel.SetRowSpan(_performerList, 10);
 
+        CreateUIPanel("ShowStatus", DockStyle.Bottom, new Control[] {
+            _nextPerformerLabel
+        });
+
         CreateUIPanel("AttractMode", DockStyle.Bottom, new Control[] {
-            _startAttractButton, 
+            _startAttractButton,
             _stopAttractButton
         });
 
@@ -195,29 +216,29 @@ public class CardManagerForm : Form
         });
 
         CreateUIPanel("RevealCards", DockStyle.Bottom, new Control[] {
-            _revealAllButton, 
-            _revealSuspectButton, 
-            _revealWeaponButton, 
+            _revealAllButton,
+            _revealSuspectButton,
+            _revealWeaponButton,
             _revealLocationButton
         });
 
         CreateUIPanel("HideCards", DockStyle.Bottom, new Control[] {
-            _hideAllButton, 
-            _hideSuspectButton, 
-            _hideWeaponButton, 
+            _hideAllButton,
+            _hideSuspectButton,
+            _hideWeaponButton,
             _hideLocationButton
         });
 
         CreateUIPanel("Setup", DockStyle.Bottom, new Control[] {
-            _shuffleAssignButton, 
-            _setWallpaperButton, 
-            new Label{ Text="Delay (ms)"}, 
-            _delayNumeric, 
+            _shuffleAssignButton,
+            _setWallpaperButton,
+            new Label{ Text="Delay (ms)"},
+            _delayNumeric,
             _autoFlipCheckBox
         });
 
         CreateUIPanel("StateManagement", DockStyle.Bottom, new Control[] {
-            _exportAppStateButton, 
+            _exportAppStateButton,
             _importAppStateButton
         });
 
@@ -272,7 +293,7 @@ public class CardManagerForm : Form
             using var ofd = new OpenFileDialog
             {
                 RestoreDirectory = true,
-                
+
                 InitialDirectory = Path.Combine(AppStateService.GetDropboxPath(), "Show Card States"),
                 Filter = "JSON Files|*.json|All Files|*.*"
             };
@@ -321,7 +342,14 @@ public class CardManagerForm : Form
             _stateService.Save();
         };
 
+        _performerList.DoubleClick += (_, __) => SetNextPerformerFromPerformerList();
+
         FormClosing += (_, __) => _stateService.Save();
+    }
+
+    private void _performerList_DoubleClick(object? sender, EventArgs e)
+    {
+        throw new NotImplementedException();
     }
 
     private void BindData()
@@ -459,15 +487,36 @@ public class CardManagerForm : Form
         _log.Info("Shuffled suspects and assigned weapons/locations.");
     }
 
-    private void SetNextPerformer()
+    public void SetNextPerformerFromPerformerList()
     {
-        int currentOrder = _currentPerformer?.RunOrder ?? -1;
+        Performer selectedPerformer = (Performer)_performerList.SelectedItem!;
+        SetNextPerformer(selectedPerformer.RunOrder);
+    }
+
+    public void SetNextPerformer(int runThisActNext = -1)
+    {
+        int currentOrder; ;
+
+        if (runThisActNext == -1)
+        {
+            currentOrder = _currentPerformer?.RunOrder ?? -1;
+        }
+        else
+        {
+            currentOrder = runThisActNext - 1;
+        }
+
         var next = _runService.GetNextPerformer(_stateService.State.Performers, currentOrder)
-                   ?? _stateService.State.Performers.OrderBy(p => p.RunOrder).FirstOrDefault();
+                       ?? _stateService.State.Performers.OrderBy(p => p.RunOrder).FirstOrDefault();
 
         if (next == null)
         {
             Debugger.Break();
+        }
+
+        if (runThisActNext != -1 && next!.RunOrder != runThisActNext)
+        {
+            throw new InvalidOperationException($"Expected to set performer with run order {runThisActNext}, but got {next.RunOrder}.");
         }
 
         _currentPerformer = next;
@@ -475,9 +524,12 @@ public class CardManagerForm : Form
         _cardView.SetCards(next!.Suspect, next.Weapon, next.Location);
         _cardView.ShowBacks();
         _log.Info($"Next performer set: {next.Name}.");
+        _nextPerformerLabel.Text = $"Next Performer: {next.Name}";
 
         if (_autoFlipCheckBox.Checked)
+        {
             RevealAll();
+        }
     }
 
     private void ToggleFade()
